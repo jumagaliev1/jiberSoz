@@ -1,14 +1,22 @@
 package service
 
-import "errors"
+import (
+	"errors"
+	"github.com/jumagaliev1/jiberSoz/internal/storage"
+)
 
 type Service struct {
+	Text ITextService
 }
 
-func New(repo *repository.Repository) (*Service, error) {
+func New(repo *storage.Repository) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("NO repo")
 	}
 
-	return &Service{}, nil
+	textService := NewTextService(repo)
+
+	return &Service{
+		Text: textService,
+	}, nil
 }
