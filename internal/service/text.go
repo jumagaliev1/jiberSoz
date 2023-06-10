@@ -5,25 +5,33 @@ import (
 	"errors"
 	"github.com/jumagaliev1/jiberSoz/internal/model"
 	"github.com/jumagaliev1/jiberSoz/internal/storage"
+	"github.com/jumagaliev1/jiberSoz/internal/storage/redis"
 	"github.com/jumagaliev1/jiberSoz/internal/storage/s3"
+	"github.com/labstack/gommon/log"
 	"math/rand"
+	"strconv"
 	"time"
 )
 
 var (
 	lengthBytes = 8
 	letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	minView     = 10
 )
 
 type TextService struct {
-	repo *storage.Repository
-	s3   *s3.AmazonS3
+	repo      *storage.Repository
+	s3        *s3.AmazonS3
+	cacheView *redis.RedisClient
+	cachePost *redis.RedisClient
 }
 
-func NewTextService(repo *storage.Repository, amazonS3 *s3.AmazonS3) *TextService {
+func NewTextService(repo *storage.Repository, amazonS3 *s3.AmazonS3, cacheView *redis.RedisClient, cachePost *redis.RedisClient) *TextService {
 	return &TextService{
-		repo: repo,
-		s3:   amazonS3,
+		repo:      repo,
+		s3:        amazonS3,
+		cacheView: cacheView,
+		cachePost: cachePost,
 	}
 }
 
@@ -40,25 +48,54 @@ func (s *TextService) Create(ctx context.Context, request model.TextRequest) (*m
 		return nil, err
 	}
 
+	err = s.cacheView.Set(ctx, text.Link, 0)
+	if err != nil {
+		return nil, err
+	}
+
 	return s.repo.Text.Create(ctx, text)
 }
 
 func (s *TextService) GetByLink(ctx context.Context, link string) (*model.TextResponse, error) {
 	text, err := s.repo.Text.GetByLink(ctx, link)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
+
+	view, err := s.cacheView.Get(ctx, text.Link)
+	if err != nil {
+		log.Error(err.Error())
+		return nil, err
+	}
+
 	if checkExpired(text) {
 		return nil, errors.New("text's expired")
 	}
 
-	message, err := s.s3.Download(text.Link)
+	viewCount, err := strconv.Atoi(view.(string))
 	if err != nil {
 		return nil, err
 	}
 
-	response := text.ToTextResponse()
+	message, err := s.getMessage(ctx, *text, viewCount)
+	if err != nil {
+		return nil, err
+	}
 
+	if viewCount == minView {
+		err := s.cachePost.Set(ctx, text.Link, message)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	viewCount++
+	if err := s.cacheView.Set(ctx, text.Link, view); err != nil {
+		return nil, err
+	}
+
+	response := text.ToTextResponse()
 	response.Message = message
 
 	return &response, nil
@@ -70,17 +107,39 @@ func (s *TextService) GetByID(ctx context.Context, ID uint) (*model.TextResponse
 		return nil, err
 	}
 
+	view, err := s.cacheView.Get(ctx, text.Link)
+	if err != nil {
+		log.Error(err.Error())
+		return nil, err
+	}
+
 	if checkExpired(text) {
 		return nil, errors.New("text's expired")
 	}
 
-	message, err := s.s3.Download(text.Link)
+	viewCount, err := strconv.Atoi(view.(string))
 	if err != nil {
 		return nil, err
 	}
 
-	response := text.ToTextResponse()
+	message, err := s.getMessage(ctx, *text, viewCount)
+	if err != nil {
+		return nil, err
+	}
 
+	if viewCount == minView {
+		err := s.cachePost.Set(ctx, text.Link, message)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	viewCount++
+	if err := s.cacheView.Set(ctx, text.Link, view); err != nil {
+		return nil, err
+	}
+
+	response := text.ToTextResponse()
 	response.Message = message
 
 	return &response, nil
@@ -101,4 +160,24 @@ func checkExpired(text *model.Text) bool {
 	}
 
 	return false
+}
+
+func (s *TextService) getMessage(ctx context.Context, text model.Text, viewCount int) (string, error) {
+	var message string
+
+	if viewCount > minView {
+		res, err := s.cachePost.Get(ctx, text.Link)
+		if err != nil {
+			return "", err
+		}
+		message = res.(string)
+	} else {
+		res, err := s.s3.Download(text.Link)
+		if err != nil {
+			return "", err
+		}
+		message = res
+	}
+
+	return message, nil
 }

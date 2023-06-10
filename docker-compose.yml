@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  redis-view:
+    image: redis:alpine
+    ports:
+      - "6381:6379"
+  redis-post:
+    image: redis:alpine
+    ports:
+      - "6380:6379"
