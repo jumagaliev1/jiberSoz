@@ -6,7 +6,6 @@ import (
 	"github.com/jumagaliev1/jiberSoz/internal/model"
 	"github.com/jumagaliev1/jiberSoz/internal/storage"
 	"github.com/jumagaliev1/jiberSoz/internal/storage/s3"
-	"github.com/labstack/gommon/log"
 	"math/rand"
 	"time"
 )
@@ -29,12 +28,14 @@ func NewTextService(repo *storage.Repository, amazonS3 *s3.AmazonS3) *TextServic
 }
 
 func (s *TextService) Create(ctx context.Context, request model.TextRequest) (*model.Text, error) {
+	message := request.Message
+
 	text := request.ToText()
 	text.CreatedAt = time.Now()
 	text.ExpiresAt = text.CreatedAt.AddDate(0, 0, request.Day)
 	text.Link = generateLink()
 
-	err := s.s3.Upload(text.Link, text.Message)
+	err := s.s3.Upload(text.Link, message)
 	if err != nil {
 		return nil, err
 	}
@@ -42,26 +43,28 @@ func (s *TextService) Create(ctx context.Context, request model.TextRequest) (*m
 	return s.repo.Text.Create(ctx, text)
 }
 
-func (s *TextService) GetByLink(ctx context.Context, link string) (*model.Text, error) {
+func (s *TextService) GetByLink(ctx context.Context, link string) (*model.TextResponse, error) {
 	text, err := s.repo.Text.GetByLink(ctx, link)
 	if err != nil {
 		return nil, err
 	}
-	log.Info(text.Message)
 	if checkExpired(text) {
 		return nil, errors.New("text's expired")
 	}
 
-	ans, err := s.s3.Download(text.Link)
+	message, err := s.s3.Download(text.Link)
 	if err != nil {
 		return nil, err
 	}
-	text.Message = ans
 
-	return text, nil
+	response := text.ToTextResponse()
+
+	response.Message = message
+
+	return &response, nil
 }
 
-func (s *TextService) GetByID(ctx context.Context, ID uint) (*model.Text, error) {
+func (s *TextService) GetByID(ctx context.Context, ID uint) (*model.TextResponse, error) {
 	text, err := s.repo.Text.GetByID(ctx, ID)
 	if err != nil {
 		return nil, err
@@ -71,7 +74,16 @@ func (s *TextService) GetByID(ctx context.Context, ID uint) (*model.Text, error)
 		return nil, errors.New("text's expired")
 	}
 
-	return text, nil
+	message, err := s.s3.Download(text.Link)
+	if err != nil {
+		return nil, err
+	}
+
+	response := text.ToTextResponse()
+
+	response.Message = message
+
+	return &response, nil
 }
 
 func generateLink() string {

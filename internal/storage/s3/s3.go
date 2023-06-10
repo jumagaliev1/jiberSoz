@@ -16,7 +16,7 @@ type AmazonS3 struct {
 
 func NewAmazonS3() *AmazonS3 {
 	region := viper.GetString("s3.region")
-	creds := credentials.NewStaticCredentials(viper.GetString("aws_access_key_id"), viper.GetString("aws_secret_access_key"), "")
+	creds := credentials.NewStaticCredentials(viper.GetString("s3.aws_access_key_id"), viper.GetString("s3.aws_secret_access_key"), "")
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		Config:            *aws.NewConfig().WithRegion(region).WithCredentials(creds),

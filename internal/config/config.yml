@@ -2,3 +2,4 @@ port: 8881
 
 postgres:
   uri: "postgresql://postgres:postgres@db:5432/postgres"
+

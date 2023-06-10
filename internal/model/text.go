@@ -4,7 +4,6 @@ import "time"
 
 type Text struct {
 	ID        uint      `json:"id"`
-	Message   string    `json:"message"`
 	Link      string    `json:"link"`
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -13,7 +12,6 @@ type Text struct {
 func (t Text) ToTextResponse() TextResponse {
 	return TextResponse{
 		ID:        t.ID,
-		Message:   t.Message,
 		Link:      t.Link,
 		CreatedAt: t.CreatedAt,
 		ExpiresAt: t.ExpiresAt,
@@ -26,9 +24,7 @@ type TextRequest struct {
 }
 
 func (t TextRequest) ToText() Text {
-	return Text{
-		Message: t.Message,
-	}
+	return Text{}
 }
 
 type TextResponse struct {
