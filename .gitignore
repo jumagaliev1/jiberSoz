@@ -1,1 +1,3 @@
 .idea
+./internal/config/s3.yml
+.aws
