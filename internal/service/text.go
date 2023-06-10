@@ -5,6 +5,8 @@ import (
 	"errors"
 	"github.com/jumagaliev1/jiberSoz/internal/model"
 	"github.com/jumagaliev1/jiberSoz/internal/storage"
+	"github.com/jumagaliev1/jiberSoz/internal/storage/s3"
+	"github.com/labstack/gommon/log"
 	"math/rand"
 	"time"
 )
@@ -16,10 +18,14 @@ var (
 
 type TextService struct {
 	repo *storage.Repository
+	s3   *s3.AmazonS3
 }
 
-func NewTextService(repo *storage.Repository) *TextService {
-	return &TextService{repo: repo}
+func NewTextService(repo *storage.Repository, amazonS3 *s3.AmazonS3) *TextService {
+	return &TextService{
+		repo: repo,
+		s3:   amazonS3,
+	}
 }
 
 func (s *TextService) Create(ctx context.Context, request model.TextRequest) (*model.Text, error) {
@@ -27,6 +33,11 @@ func (s *TextService) Create(ctx context.Context, request model.TextRequest) (*m
 	text.CreatedAt = time.Now()
 	text.ExpiresAt = text.CreatedAt.AddDate(0, 0, request.Day)
 	text.Link = generateLink()
+
+	err := s.s3.Upload(text.Link, text.Message)
+	if err != nil {
+		return nil, err
+	}
 
 	return s.repo.Text.Create(ctx, text)
 }
@@ -36,10 +47,16 @@ func (s *TextService) GetByLink(ctx context.Context, link string) (*model.Text, 
 	if err != nil {
 		return nil, err
 	}
-
+	log.Info(text.Message)
 	if checkExpired(text) {
 		return nil, errors.New("text's expired")
 	}
+
+	ans, err := s.s3.Download(text.Link)
+	if err != nil {
+		return nil, err
+	}
+	text.Message = ans
 
 	return text, nil
 }
