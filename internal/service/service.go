@@ -7,6 +7,6 @@ import (
 
 type ITextService interface {
 	Create(ctx context.Context, request model.TextRequest) (*model.Text, error)
-	GetByLink(ctx context.Context, link string) (*model.Text, error)
-	GetByID(ctx context.Context, ID uint) (*model.Text, error)
+	GetByLink(ctx context.Context, link string) (*model.TextResponse, error)
+	GetByID(ctx context.Context, ID uint) (*model.TextResponse, error)
 }
