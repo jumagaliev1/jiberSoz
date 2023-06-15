@@ -2,10 +2,15 @@ package app
 
 import (
 	"context"
+	pb "github.com/jumagaliev1/jiberSoz/hasher/proto"
 	"github.com/jumagaliev1/jiberSoz/internal/service"
 	"github.com/jumagaliev1/jiberSoz/internal/storage"
+	"github.com/jumagaliev1/jiberSoz/internal/storage/redis"
 	http "github.com/jumagaliev1/jiberSoz/internal/transport"
 	"github.com/jumagaliev1/jiberSoz/internal/transport/http/handler"
+	"github.com/spf13/viper"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type App struct {
@@ -21,7 +26,17 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 
-	svc, err := service.New(repo)
+	conn, err := grpc.Dial(viper.GetString("grpc.uri"), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	grpcServer := pb.NewHashServiceClient(conn)
+
+	cacheView := redis.New(viper.GetString("redis.view.uri"))
+	cachePost := redis.New(viper.GetString("redis.post.uri"))
+
+	svc, err := service.New(repo, cacheView, cachePost, grpcServer)
 	if err != nil {
 		return err
 	}

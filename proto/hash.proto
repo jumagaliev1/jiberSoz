@@ -1,0 +1,15 @@
+syntax = "proto3";
+option go_package = "github.com/jumagaliev1/jiberSoz/hasher";
+package hasher;
+
+service HashService {
+  rpc Get(GetHashRequest) returns (GetHashResponse) {}
+}
+
+message GetHashRequest {
+
+}
+
+message GetHashResponse {
+  string hash = 1;
+}

@@ -3,20 +3,18 @@ package service
 import (
 	"context"
 	"errors"
+	pb "github.com/jumagaliev1/jiberSoz/hasher/proto"
 	"github.com/jumagaliev1/jiberSoz/internal/model"
 	"github.com/jumagaliev1/jiberSoz/internal/storage"
 	"github.com/jumagaliev1/jiberSoz/internal/storage/redis"
 	"github.com/jumagaliev1/jiberSoz/internal/storage/s3"
 	"github.com/labstack/gommon/log"
-	"math/rand"
 	"strconv"
 	"time"
 )
 
 var (
-	lengthBytes = 8
-	letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	minView     = 10
+	minView = 10
 )
 
 type TextService struct {
@@ -24,14 +22,16 @@ type TextService struct {
 	s3        *s3.AmazonS3
 	cacheView *redis.RedisClient
 	cachePost *redis.RedisClient
+	hash      pb.HashServiceClient
 }
 
-func NewTextService(repo *storage.Repository, amazonS3 *s3.AmazonS3, cacheView *redis.RedisClient, cachePost *redis.RedisClient) *TextService {
+func NewTextService(repo *storage.Repository, amazonS3 *s3.AmazonS3, cacheView *redis.RedisClient, cachePost *redis.RedisClient, hash pb.HashServiceClient) *TextService {
 	return &TextService{
 		repo:      repo,
 		s3:        amazonS3,
 		cacheView: cacheView,
 		cachePost: cachePost,
+		hash:      hash,
 	}
 }
 
@@ -41,9 +41,13 @@ func (s *TextService) Create(ctx context.Context, request model.TextRequest) (*m
 	text := request.ToText()
 	text.CreatedAt = time.Now()
 	text.ExpiresAt = text.CreatedAt.AddDate(0, 0, request.Day)
-	text.Link = generateLink()
+	hash, err := s.hash.Get(ctx, &pb.GetHashRequest{})
+	if err != nil {
+		return nil, err
+	}
+	text.Link = hash.Hash
 
-	err := s.s3.Upload(text.Link, message)
+	err = s.s3.Upload(text.Link, message)
 	if err != nil {
 		return nil, err
 	}
@@ -143,15 +147,6 @@ func (s *TextService) GetByID(ctx context.Context, ID uint) (*model.TextResponse
 	response.Message = message
 
 	return &response, nil
-}
-
-func generateLink() string {
-	b := make([]byte, lengthBytes)
-
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
 }
 
 func checkExpired(text *model.Text) bool {
