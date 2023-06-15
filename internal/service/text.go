@@ -41,10 +41,12 @@ func (s *TextService) Create(ctx context.Context, request model.TextRequest) (*m
 	text := request.ToText()
 	text.CreatedAt = time.Now()
 	text.ExpiresAt = text.CreatedAt.AddDate(0, 0, request.Day)
+
 	hash, err := s.hash.Get(ctx, &pb.GetHashRequest{})
 	if err != nil {
 		return nil, err
 	}
+
 	text.Link = hash.Hash
 
 	err = s.s3.Upload(text.Link, message)
@@ -67,50 +69,24 @@ func (s *TextService) GetByLink(ctx context.Context, link string) (*model.TextRe
 		return nil, err
 	}
 
-	view, err := s.cacheView.Get(ctx, text.Link)
-	if err != nil {
-		log.Error(err.Error())
-		return nil, err
-	}
+	response, err := s.getMessage(ctx, text)
 
-	if checkExpired(text) {
-		return nil, errors.New("text's expired")
-	}
-
-	viewCount, err := strconv.Atoi(view.(string))
-	if err != nil {
-		return nil, err
-	}
-
-	message, err := s.getMessage(ctx, *text, viewCount)
-	if err != nil {
-		return nil, err
-	}
-
-	if viewCount == minView {
-		err := s.cachePost.Set(ctx, text.Link, message)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	viewCount++
-	if err := s.cacheView.Set(ctx, text.Link, view); err != nil {
-		return nil, err
-	}
-
-	response := text.ToTextResponse()
-	response.Message = message
-
-	return &response, nil
+	return response, nil
 }
 
 func (s *TextService) GetByID(ctx context.Context, ID uint) (*model.TextResponse, error) {
 	text, err := s.repo.Text.GetByID(ctx, ID)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
 
+	response, err := s.getMessage(ctx, text)
+
+	return response, nil
+}
+
+func (s *TextService) getMessage(ctx context.Context, text *model.Text) (*model.TextResponse, error) {
 	view, err := s.cacheView.Get(ctx, text.Link)
 	if err != nil {
 		log.Error(err.Error())
@@ -118,7 +94,7 @@ func (s *TextService) GetByID(ctx context.Context, ID uint) (*model.TextResponse
 	}
 
 	if checkExpired(text) {
-		return nil, errors.New("text's expired")
+		return nil, errors.New("text's time expired")
 	}
 
 	viewCount, err := strconv.Atoi(view.(string))
@@ -126,9 +102,20 @@ func (s *TextService) GetByID(ctx context.Context, ID uint) (*model.TextResponse
 		return nil, err
 	}
 
-	message, err := s.getMessage(ctx, *text, viewCount)
-	if err != nil {
-		return nil, err
+	var message string
+
+	if viewCount > minView {
+		res, err := s.cachePost.Get(ctx, text.Link)
+		if err != nil {
+			return nil, err
+		}
+		message = res.(string)
+	} else {
+		res, err := s.s3.Download(text.Link)
+		if err != nil {
+			return nil, err
+		}
+		message = res
 	}
 
 	if viewCount == minView {
@@ -155,24 +142,4 @@ func checkExpired(text *model.Text) bool {
 	}
 
 	return false
-}
-
-func (s *TextService) getMessage(ctx context.Context, text model.Text, viewCount int) (string, error) {
-	var message string
-
-	if viewCount > minView {
-		res, err := s.cachePost.Get(ctx, text.Link)
-		if err != nil {
-			return "", err
-		}
-		message = res.(string)
-	} else {
-		res, err := s.s3.Download(text.Link)
-		if err != nil {
-			return "", err
-		}
-		message = res
-	}
-
-	return message, nil
 }
