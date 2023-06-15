@@ -12,11 +12,10 @@ type Service struct {
 	Text ITextService
 }
 
-func New(repo *storage.Repository, cacheView *redis.RedisClient, cachePost *redis.RedisClient, hasher pb.HashServiceClient) (*Service, error) {
+func New(repo *storage.Repository, s3 *s32.AmazonS3, cacheView *redis.RedisClient, cachePost *redis.RedisClient, hasher pb.HashServiceClient) (*Service, error) {
 	if repo == nil {
-		return nil, errors.New("NO repo")
+		return nil, errors.New("no given repo")
 	}
-	s3 := s32.NewAmazonS3()
 
 	textService := NewTextService(repo, s3, cacheView, cachePost, hasher)
 

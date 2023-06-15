@@ -15,8 +15,7 @@ func main() {
 		log.Fatalf("%s", err.Error())
 	}
 
-	application := app.New()
-	if err := application.Run(ctx); err != nil {
-		log.Fatal(err)
+	if err := app.New().Run(ctx); err != nil {
+		log.Fatalf("%s", err.Error())
 	}
 }

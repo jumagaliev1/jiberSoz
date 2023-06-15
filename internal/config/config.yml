@@ -2,4 +2,20 @@ port: 8881
 
 postgres:
   uri: "postgresql://postgres:postgres@db:5432/postgres"
+s3:
+  bucket: "jibersoz-texts"
+  region: ""
+  roleArn: ""
+  aws_access_key_id: ""
+  aws_secret_access_key: ""
 
+redis:
+  view:
+    uri: "localhost:6381"
+    port: 6381
+  post:
+    uri: "localhost:6380"
+    port: 6380
+
+grpc:
+  uri: "localhost:50051"
