@@ -19,3 +19,4 @@ redis:
 
 grpc:
   uri: "app:50051"
+
