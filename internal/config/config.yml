@@ -18,4 +18,4 @@ redis:
     port: 6380
 
 grpc:
-  uri: "localhost:50051"
+  uri: "app:50051"
